@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React, { useEffect,  useState  } from "react";
 import PropTypes from "prop-types";
-import { Link as ReactRouterLink, useSearchParams } from "react-router-dom";
+import { Link as ReactRouterLink, useSearchParams,useNavigate } from "react-router-dom";
 import {
   Box,
   Button,
@@ -21,14 +21,19 @@ import {
   Icon,
   useColorModeValue,
   Flex,
+  Link as ChakraLink,
 } from "@chakra-ui/react";
 import { GrHome, GrFolder, GrDocument, GrFormNext } from "react-icons/gr";
 import { useContents } from "../hooks/useContents";
 import { sanitizePrefix, formatFileSize } from "../helpers";
+import axios from 'axios';
+
 
 export default function Explorer() {
   const [searchParams] = useSearchParams();
   const prefix = sanitizePrefix(searchParams.get("prefix") || "");
+  const navigate = useNavigate();
+
 
   useEffect(() => {
     document.title = process.env.BUCKET_NAME;
@@ -39,7 +44,7 @@ export default function Explorer() {
       <Box flex="1" width="100%">
         <VStack alignItems="flex-start" spacing={5} width="100%">
           <Navigation prefix={prefix} />
-          <Listing prefix={prefix} />
+          <Listing prefix={prefix} navigate={navigate} />
         </VStack>
       </Box>
     </Flex>
@@ -100,23 +105,41 @@ Navigation.propTypes = {
   prefix: PropTypes.string.isRequired,
 };
 
-function Listing({ prefix }) {
+function Listing({ prefix,navigate  }) {
   const { status, data, error } = useContents(prefix);
   const tableBg = useColorModeValue("white", "gray.800");
   
-  // Function to handle file download
-  const handleDownload = (url) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', true); // Set the download attribute
-    link.click(); // Programmatically click the link to trigger the download
+
+  const handleDownload = (url, filename) => {
+    console.log("mrinal->",url)
+    fetch(url)
+      .then(response => response.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link); // Clean up
+      })
+      .catch(error => console.error('Download failed', error));
   };
+  
+
+  console.log("mrinal->",data)
 
   return (
     <>
-      <Heading as="h3" size="lg" mt={2} mb={2} fontWeight="semibold">
-        {prefix ? `${prefix.split("/").slice(-2, -1)}/` : process.env.BUCKET_NAME}
-      </Heading>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+  <div style={{ flex: 1 }}>
+    <Heading as="h3" size="lg" mt={2} mb={2} fontWeight="semibold">
+      {prefix ? `${prefix.split("/").slice(-2, -1)}/` : process.env.BUCKET_NAME}
+    </Heading>
+  </div>
+
+</div>
+
       <Box borderWidth="1px" borderRadius="md" shadow="sm" bg={tableBg} width="100%">
         <Table variant="simple" size="md">
           <Thead bg={useColorModeValue("gray.200", "gray.700")}>
@@ -154,9 +177,12 @@ function Listing({ prefix }) {
                         <Tr key={item.path}>
                           <Td>
                             <Icon as={GrFolder} mr={2} />
-                            <Link as={ReactRouterLink} to={item.url}>
+                            {/* <Link as={ReactRouterLink} to={item.url}>
                               {item.name}
-                            </Link>
+                            </Link> */}
+                              <ChakraLink as={ReactRouterLink} to={item.url}>
+                        {item.name}
+                      </ChakraLink>
                           </Td>
                           <Td>–</Td>
                           <Td isNumeric>–</Td>
@@ -174,7 +200,7 @@ function Listing({ prefix }) {
                           <Td>{item.lastModified.toLocaleString()}</Td>
                           <Td isNumeric>{formatFileSize(item.size)}</Td>
                           <Td>
-                            <Button as={Link} href={item.url} download colorScheme="blue" size="sm">
+                            <Button onClick={()=>handleDownload(item.url,item.name)}   colorScheme="blue" size="sm">
                               Download
                             </Button>
                           </Td> {/* New cell with download button */}
@@ -195,4 +221,5 @@ function Listing({ prefix }) {
 
 Listing.propTypes = {
   prefix: PropTypes.string.isRequired,
+  navigate: PropTypes.func.isRequired,
 };
